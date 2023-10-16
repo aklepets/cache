@@ -1,4 +1,7 @@
 target/
+src/main/guava.cache/target
+src/main/service.cache/target
+
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
