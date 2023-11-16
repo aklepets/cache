@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class CacheService {
     private static final int MAX_SIZE = 100_000;
     private static final long EVICTION_TIME_MS = 5_000;
-    private final Map<CacheEntry, Long> cache;
+    private final Map<Integer, TimedCacheEntry> cache;
     private long totalPutTimeMilliSeconds;
     private long evictionCount;
 
@@ -16,23 +16,23 @@ public class CacheService {
         evictionCount = 0;
     }
 
-    public void put(CacheEntry c){
+    public void put(int id, CacheEntry cacheEntry){
         long startTime = System.currentTimeMillis();
         if (cache.size() == MAX_SIZE) {
-            evictOldestEntry();
+            evictOutdatedEntries();
         }
-        evictOutdatedEntries();
-        cache.put(c, System.currentTimeMillis());
+        TimedCacheEntry timedCacheEntry = new TimedCacheEntry(cacheEntry, startTime);
+        cache.put(id, timedCacheEntry);
         totalPutTimeMilliSeconds += System.currentTimeMillis() - startTime;
         System.out.println("cache size is: " + cache.size());
         System.out.println("cache totalPutTime: " + totalPutTimeMilliSeconds / 1_000_000);
     }
 
-    public Long get(CacheEntry c){
-        if (cache.containsKey(c)){
-            if (System.currentTimeMillis() - cache.get(c) < EVICTION_TIME_MS)
+    public CacheEntry get(int id){
+        if (cache.containsKey(id)){
+            if (System.currentTimeMillis() - cache.get(id).getTimestamp() < EVICTION_TIME_MS)
             {
-                return cache.get(c);
+                return cache.get(id).getEntry();
             } else {
                 evictOutdatedEntries();
             }
@@ -40,26 +40,11 @@ public class CacheService {
         return null;
     }
 
-    private void evictOldestEntry(){
-        CacheEntry oldestElement = null;
-        long oldestTimestamp = Long.MAX_VALUE;
-
-        for (Map.Entry<CacheEntry, Long> entry : cache.entrySet()) {
-            long timestamp = entry.getValue();
-            if (timestamp < oldestTimestamp) {
-                oldestTimestamp = timestamp;
-                oldestElement = entry.getKey();
-            }
-        }
-        cache.entrySet().remove(oldestElement);
-        evictionCount++;
-    }
-
     private void evictOutdatedEntries(){
         cache.entrySet().removeIf(entry -> {
-            boolean isEvicted = System.currentTimeMillis() - entry.getValue() > EVICTION_TIME_MS;
-            if (isEvicted) {evictionCount++;}
-            return isEvicted;
+            boolean toEvict = System.currentTimeMillis() - entry.getValue().getTimestamp() > EVICTION_TIME_MS;
+            if (toEvict) {evictionCount++;}
+            return toEvict;
         });
     }
 
@@ -74,14 +59,34 @@ public class CacheService {
         CacheService cacheService = new CacheService();
 
         for (int i = 0; i < 200; i++){
-            cacheService.put(new CacheEntry("item" + i) );
+            cacheService.put(i, new CacheEntry("item" + i) );
         }
 
         cacheService.cache.entrySet().forEach(element -> element.toString());
 
-        long value = cacheService.get(new CacheEntry("item1"));
+        CacheEntry value = cacheService.get(123);
         System.out.println("Value for key item1 is " + value);
 
         cacheService.printStatistics();
+    }
+
+    private static class TimedCacheEntry {
+        private final CacheEntry entry;
+        private final Long timestamp;
+
+        private TimedCacheEntry(CacheEntry entry, Long timestamp){
+            this.entry = entry;
+
+            this.timestamp = timestamp;
+        }
+
+        public CacheEntry getEntry() {
+            return entry;
+        }
+
+        public Long getTimestamp() {
+            return timestamp;
+        }
+
     }
 }
